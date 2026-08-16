@@ -50,13 +50,18 @@ async function unlock(password){
   const plain = await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(p.iv)},key,b64(chunks.join('')));
   return dec.decode(plain);
 }
+function ensureThreeImportMap(html){
+  if(html.includes('type="importmap"')) return html;
+  const importMap = '<scr'+'ipt type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</scr'+'ipt>';
+  return html.replace('</head>', importMap+'</head>');
+}
 const form=document.getElementById('unlockForm'),btn=document.getElementById('unlockBtn'),status=document.getElementById('status');
 form.addEventListener('submit',async e=>{
   e.preventDefault(); const password=document.getElementById('password').value;
   if(!password){status.textContent='Bitte Passwort eingeben.';return}
   btn.disabled=true;status.style.color='#a9b7c6';status.textContent='Entschlüssele…';
   try{
-    const html=await unlock(password);
+    const html=ensureThreeImportMap(await unlock(password));
     sessionStorage.setItem('hd-unlocked','1');
     document.open();document.write(html);document.close();
   }catch(err){
