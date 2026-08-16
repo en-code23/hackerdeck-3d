@@ -38,11 +38,16 @@ async function derive(password, salt, iterations){
   return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations,hash:'SHA-256'}, base, {name:'AES-GCM',length:256}, false, ['decrypt']);
 }
 async function unlock(password){
-  const res = await fetch('./protected/payload.json',{cache:'no-store'});
-  if(!res.ok) throw new Error('Payload konnte nicht geladen werden.');
-  const p = await res.json();
+  const metaRes = await fetch('./protected/payload-meta.json',{cache:'no-store'});
+  if(!metaRes.ok) throw new Error('Payload-Metadaten konnten nicht geladen werden.');
+  const p = await metaRes.json();
+  const chunks = await Promise.all(p.chunks.map(async file => {
+    const res = await fetch('./protected/'+file,{cache:'no-store'});
+    if(!res.ok) throw new Error('Payload-Chunk konnte nicht geladen werden.');
+    return res.text();
+  }));
   const key = await derive(password,b64(p.salt),p.iterations);
-  const plain = await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(p.iv)},key,b64(p.ciphertext));
+  const plain = await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(p.iv)},key,b64(chunks.join('')));
   return dec.decode(plain);
 }
 const form=document.getElementById('unlockForm'),btn=document.getElementById('unlockBtn'),status=document.getElementById('status');
