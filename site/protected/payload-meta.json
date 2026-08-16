@@ -1,0 +1,1 @@
+{"v":1,"kdf":"PBKDF2-SHA-256","cipher":"AES-GCM","iterations":310000,"salt":"C1U7XKDN81wHVTLP1xeC5A==","iv":"QL+2ZLZY0QlL5bqj","builtAt":"2026-08-16T13:48:35.302Z","chunks":["payload-00.txt","payload-01.txt","payload-02.txt","payload-03.txt","payload-04.txt","payload-05.txt","payload-06.txt","payload-07.txt"]}
