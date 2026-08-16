@@ -1,6 +1,6 @@
 # HackerDeck 3D Hardware Lab
 
-Private-source, password-encrypted GitHub Pages preview for an ESP32-S3 + ESP32-C5 handheld HackerDeck.
+Private source repository for the ESP32-S3 + ESP32-C5 HackerDeck 3D configurator.
 
 ## Features
 - Interactive Three.js 3D assembly
@@ -12,22 +12,25 @@ Private-source, password-encrypted GitHub Pages preview for an ESP32-S3 + ESP32-
 - Current/estimated BOM prices with source links and dynamic total
 - Static-site encryption: PBKDF2-SHA-256 + AES-256-GCM
 
-## Password security
-The deployed `site/` contains only the login shell plus an encrypted payload. The password is **not** stored in the published HTML or payload metadata. The plaintext app remains in this private repository and is not uploaded by the Pages workflow.
+## Security model
+This repository stays **private** and contains the plaintext source in `src/`.
 
-This is still a static site: a strong password matters because an attacker can copy the encrypted payload and attempt offline guesses.
+The public GitHub Pages repository must contain **only** the contents of `site/`: the login shell plus the encrypted payload chunks. The password is **not** stored in the published HTML or payload metadata.
+
+This is still a static encrypted site: a strong password matters because anyone can download the encrypted payload and attempt offline guesses.
 
 ## Rebuild encrypted payload
 ```bash
 HACKERDECK_PASSWORD='your-long-password' npm run build
 ```
-Then commit the updated `site/protected/payload-meta.json` and `site/protected/payload-*.txt` files.
+Then publish only `site/index.html`, `site/robots.txt`, `site/.nojekyll`, and `site/protected/*` to the separate public Pages repository.
 
-## GitHub Pages
-The included workflow deploys only the `site/` directory. In repository Settings → Pages, choose **GitHub Actions** as the source if GitHub has not done so automatically.
+## GitHub Pages architecture
+- `en-code23/hackerdeck-3d` — private source repository; never enable public Pages here.
+- Separate public deploy repository — contains only encrypted/static `site/` output and hosts GitHub Pages.
 
 ## Price policy
-Prices are a snapshot for 2026-08-16 and exclude shipping. Items marked `estimate` are layout-budget estimates, not verified live prices. Update `src/data.js`, rebuild, then commit.
+Prices are a snapshot for 2026-08-16 and exclude shipping. Items marked `estimate` are layout-budget estimates, not verified live prices. Update `src/data.js`, rebuild, then publish the new encrypted payload.
 
 ## CAD disclaimer
 The 3D geometry is a dimensionally useful layout visualization, not manufacturing CAD. Measure the exact purchased modules before designing a PCB or printable enclosure.
