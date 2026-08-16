@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#070b10" />
+  <title>HackerDeck 3D Hardware Lab</title>
+  <style>__STYLE__</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="brandmark"></span><div class="brandtext">HACKERDECK <span>/ 3D HARDWARE LAB</span></div></div>
+    <div class="topstatus"><span class="pill hideMobile">ESP32-S3 + C5</span><span class="pill" id="headerPrice">€—</span><div class="mobileTabs"><button class="ghost" id="openParts">Teile</button><button class="ghost" id="openInfo">Preis</button></div></div>
+  </header>
+  <main class="workspace">
+    <aside class="sidebar" id="sidebar">
+      <section class="panel">
+        <h2>Konfiguration</h2>
+        <div class="label"><span>Tastatur</span><span class="value" id="kbdDims">—</span></div>
+        <select id="keyboardSelect" class="select"></select>
+        <div style="height:10px"></div>
+        <div class="kbdCard"><div class="kbdTitle" id="kbdTitle"></div><div class="kbdMeta" id="kbdMeta"></div><div class="recommend" id="kbdRecommend"></div></div>
+      </section>
+      <section class="panel">
+        <h3>Ansicht</h3>
+        <div class="seg"><button data-view="assembly" class="active">Gerät</button><button data-view="exploded">Exploded</button><button data-view="component">Bauteil</button></div>
+        <div style="height:12px"></div>
+        <div class="label"><span>Explosion</span><span class="value" id="explodeValue">0%</span></div>
+        <input id="explode" type="range" min="0" max="100" value="0" />
+        <div style="height:10px"></div>
+        <button class="ghost" id="resetCamera" style="width:100%">Kamera zurücksetzen</button>
+      </section>
+      <section class="panel">
+        <h3>Gehäusemaß</h3>
+        <div class="metricgrid"><div class="metric"><strong id="dimW">—</strong><span>BREITE</span></div><div class="metric"><strong id="dimH">—</strong><span>HÖHE</span></div><div class="metric"><strong id="dimD">—</strong><span>DICKE</span></div></div>
+      </section>
+      <section class="panel">
+        <div class="label"><h3 style="margin:0">Komponenten</h3><span>antippen = isolieren</span></div>
+        <div class="componentList" id="componentList"></div>
+      </section>
+      <div class="footerNote">3D-Modelle sind maßstäbliche Layout-Modelle auf Basis der angegebenen bzw. recherchierten Abmessungen, keine fertigen STEP/CAD-Produktmodelle. Vor PCB/3D-Druck müssen echte Bauteile nachgemessen werden.</div>
+    </aside>
+
+    <section class="stage">
+      <canvas id="canvas"></canvas>
+      <div class="stagehud"><div class="hudgroup"><span class="hudchip" id="modeChip">ASSEMBLY</span><span class="hudchip" id="kbdChip">—</span></div><div class="hudgroup"><span class="hudchip">Drag: drehen</span><span class="hudchip">Pinch/Wheel: zoom</span></div></div>
+      <div class="legend" id="legend">Das Gehäuse wird automatisch an die gewählte Tastatur angepasst. Mit „Exploded“ kannst du die Innenteile auseinanderziehen.</div>
+    </section>
+
+    <aside class="inspector" id="inspector">
+      <section class="panel">
+        <div class="label"><span>Gesamtpreis</span><span class="tag" id="priceDate">Stand —</span></div>
+        <div class="priceTotal" id="totalPrice">€—</div>
+        <div class="priceNote">Ohne Versand. Gelbe „Schätzung“-Positionen sind keine Live-Shoppreise. Die Summe ändert sich mit der Tastatur.</div>
+      </section>
+      <section class="panel">
+        <h3>Gewählte Tastatur</h3>
+        <div class="partsTable" id="keyboardPrice"></div>
+      </section>
+      <section class="panel">
+        <h3>Stückliste</h3>
+        <div class="partsTable" id="partsTable"></div>
+      </section>
+    </aside>
+  </main>
+</div>
+<script type="module">__APPJS__</script>
+</body>
+</html>
