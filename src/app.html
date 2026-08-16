@@ -11,10 +11,22 @@
 <div class="app">
   <header class="topbar">
     <div class="brand"><span class="brandmark" aria-hidden="true"></span><h1 class="brandtext">HACKERDECK <span>/ 3D HARDWARE LAB</span></h1></div>
-    <div class="topstatus"><span class="pill hideMobile">ESP32-S3 + C5</span><span class="pill" id="headerPrice">€—</span><div class="mobileTabs"><button class="ghost partsTrigger" id="openParts" type="button" aria-controls="sidebar" aria-expanded="false">Teile</button><button class="ghost" id="openInfo" type="button" aria-controls="inspector" aria-expanded="false">Preis</button></div></div>
+    <div class="topstatus"><span class="pill projectChip" id="projectChip">UNTITLED DECK</span><span class="pill hideMobile">ESP32-S3 + C5</span><span class="pill" id="headerPrice">€—</span><div class="mobileTabs"><button class="ghost partsTrigger" id="openParts" type="button" aria-controls="sidebar" aria-expanded="false">Teile</button><button class="ghost" id="openInfo" type="button" aria-controls="inspector" aria-expanded="false">Preis</button></div></div>
   </header>
   <main class="workspace">
     <aside class="sidebar" id="sidebar">
+      <section class="panel projectPanel">
+        <div class="panelEyebrow"><span>DECK PROJECT</span><span class="saveState" id="saveState" data-state="saved">BEREIT</span></div>
+        <label class="srOnly" for="projectSelect">Deck-Projekt</label>
+        <select id="projectSelect" class="select projectSelect" aria-label="Deck-Projekt"></select>
+        <div class="projectActions">
+          <button class="action" id="newProject" type="button">+ Neues Deck</button>
+          <button class="ghost" id="saveProject" type="button">Speichern</button>
+          <button class="ghost" id="openProject" type="button">JSON öffnen</button>
+          <button class="ghost" id="downloadProject" type="button">JSON Download</button>
+        </div>
+        <input id="projectFile" type="file" accept="application/json,.json" hidden />
+      </section>
       <section class="panel">
         <h2>Konfiguration</h2>
         <div class="label"><label for="keyboardSelect">Tastatur</label><span class="value" id="kbdDims">—</span></div>
@@ -51,8 +63,14 @@
         <p class="panelHelp">Bauteil im Modell oder in der Liste wählen. Am Achsenkreuz ziehen; G/R wechselt das Werkzeug.</p>
       </section>
       <section class="panel">
-        <h3>Gehäusemaß</h3>
-        <div class="metricgrid"><div class="metric"><strong id="dimW">—</strong><span>BREITE</span></div><div class="metric"><strong id="dimH">—</strong><span>HÖHE</span></div><div class="metric"><strong id="dimD">—</strong><span>DICKE</span></div></div>
+        <div class="label"><h3 style="margin:0">Gehäusemaß</h3><span class="tag" id="caseMode">AUTO-FIT</span></div>
+        <div class="caseSizeGrid" aria-label="Gehäusemaße in Millimetern">
+          <label><span>W</span><input id="caseWidth" aria-label="Gehäusebreite in Millimetern" data-case-axis="w" type="number" min="40" max="420" step="1" /></label>
+          <label><span>H</span><input id="caseHeight" aria-label="Gehäusehöhe in Millimetern" data-case-axis="h" type="number" min="60" max="500" step="1" /></label>
+          <label><span>D</span><input id="caseDepth" aria-label="Gehäusetiefe in Millimetern" data-case-axis="d" type="number" min="20" max="120" step="1" /></label>
+        </div>
+        <div class="caseMinimum" id="caseMinimum">Minimum für Tastatur: —</div>
+        <button class="ghost" id="resetCaseSize" type="button" style="width:100%">Auf Tastatur einpassen</button>
       </section>
       <section class="panel">
         <div class="label"><h3 style="margin:0">Komponenten</h3><span>wählen + bewegen</span></div>
@@ -86,7 +104,48 @@
     </aside>
   </main>
   <button class="drawerBackdrop" id="drawerBackdrop" type="button" aria-label="Geöffnetes Seitenpanel schließen" hidden></button>
+  <dialog class="projectDialog" id="projectDialog" aria-labelledby="projectDialogTitle">
+    <form method="dialog" id="projectForm">
+      <div class="dialogEyebrow">NEW DECK</div>
+      <h2 id="projectDialogTitle">Neues HackerDeck-Projekt</h2>
+      <p>Startet mit der CardKB, automatischem Gehäusemaß und unveränderten Bauteilpositionen.</p>
+      <label for="projectName">Projektname</label>
+      <input id="projectName" name="projectName" type="text" maxlength="64" autocomplete="off" required value="Untitled Deck" />
+      <div class="dialogActions"><button class="ghost" type="button" id="cancelProject">Abbrechen</button><button class="action" type="submit">Deck erstellen</button></div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </div>
-<script type="module" src="__APP_SCRIPT__"></script>
+<script type="module">
+  const showInitializationFailure = error => {
+    if (document.querySelector('.fatalOverlay')) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'fatalOverlay';
+    overlay.setAttribute('role', 'alert');
+    const card = document.createElement('section');
+    card.className = 'fatalCard';
+    const title = document.createElement('h2');
+    title.textContent = 'HackerDeck konnte nicht initialisiert werden';
+    const message = document.createElement('p');
+    message.textContent = 'Laden Sie die Seite neu. Falls das Problem bleibt, öffnen Sie die Diagnose und melden Sie die angezeigte Fehlermeldung.';
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Diagnose öffnen';
+    const output = document.createElement('pre');
+    output.textContent = error instanceof Error ? error.stack || error.message : String(error || 'Unbekannter Initialisierungsfehler');
+    details.append(summary, output);
+    card.append(title, message, details);
+    overlay.append(card);
+    document.body.append(overlay);
+  };
+  window.addEventListener('error', event => showInitializationFailure(event.error || event.message));
+  window.addEventListener('unhandledrejection', event => showInitializationFailure(event.reason));
+  import('__APP_SCRIPT__').catch(showInitializationFailure);
+  window.setTimeout(() => {
+    if (document.documentElement.dataset.hackerdeckReady !== 'true') {
+      showInitializationFailure(new Error('Zeitüberschreitung beim Start der Anwendung.'));
+    }
+  }, 8000);
+</script>
 </body>
 </html>

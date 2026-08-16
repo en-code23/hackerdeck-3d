@@ -14,6 +14,7 @@ export const baseParts = [
   {id:'caps', name:'MBK Choc Keycaps (10er-Pack)', qty:1, price:4.50, dimsType:'layout-estimate', dims:[55,55,5], source:'https://www.keebart.com/de/produkte/mbk-blanks'},
   {id:'wifiAnt', name:'2.4/5.8 GHz Antenne + U.FL/SMA', qty:1, price:9.87, dims:[9.5,85,9.5], source:'https://www.henri.de/buero-pc-nb/w-lan/wlan-antennen/34518/wlan-antenne-2-4-5-8ghz-mit-sma-rev-stecker-und-pigtail-ufl-ipx-adapter-auch-fuer-bluetooth-geeignet.html', integrationNote:'Lieferumfang des U.FL-zu-RP-SMA-Pigtails vor Bestellung bestätigen.'},
   {id:'btAnt', name:'Interne Dual-Band FPC-Antenne U.FL', qty:1, price:2.80, dims:[13,95,1], source:'https://www.berrybase.de/dual-band-wlan-antenne-2.4ghz-5.8ghz-u.fl-anschluss'},
+  {id:'breadboard', name:'Mini Breadboard (170 Kontakte)', qty:1, price:3.50, priceType:'estimate', dims:[47,35,8.5], source:'Schätzung; exakte Ausführung vor Gehäusebau auswählen'},
   {id:'misc', name:'Kabel, Header, Schrauben, Inserts', qty:1, price:5.00, priceType:'estimate', dims:[20,20,8], source:'Schätzung'}
 ];
 

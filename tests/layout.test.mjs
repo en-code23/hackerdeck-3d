@@ -27,3 +27,15 @@ test('key faces protrude beyond the enclosure front while the keyboard body stay
     assert.ok(keyFaceFront > layout.faceplateFrontZ, `${keyboard.id} keys must remain accessible above the faceplate`);
   }
 });
+
+test('custom case dimensions expand safely and never undercut keyboard fit minimums', () => {
+  const keyboard = keyboards.find(item => item.id === 'cardkb');
+  const automatic = caseLayoutFor(keyboard);
+  const expanded = caseLayoutFor(keyboard, { w: 180, h: 240, d: 58 });
+  const undersized = caseLayoutFor(keyboard, { w: 60, h: 80, d: 20 });
+
+  assert.deepEqual([expanded.w, expanded.h, expanded.d], [180, 240, 58]);
+  assert.equal(expanded.customized, true);
+  assert.deepEqual([undersized.w, undersized.h, undersized.d], [automatic.w, automatic.h, automatic.d]);
+  assert.deepEqual(undersized.minimum, automatic.minimum);
+});

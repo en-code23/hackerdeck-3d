@@ -26,6 +26,8 @@ test('builds and verifies a strict passwordless static artifact', () => {
   assert.deepEqual(files, ['.nojekyll', `assets/${assetFilename}`, 'index.html', 'robots.txt'].sort());
   const index = fs.readFileSync(path.join(artifactDir, 'index.html'), 'utf8');
   assert.doesNotMatch(index, /Passwort|password|protected\/payload/i);
+  assert.match(index, /HackerDeck konnte nicht initialisiert werden/);
+  assert.match(index, /Diagnose öffnen/);
 
   const verify = spawnSync(process.execPath, ['scripts/verify.mjs'], {
     cwd: root,
