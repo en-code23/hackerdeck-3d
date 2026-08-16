@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#090d12" />
+  <meta name="referrer" content="no-referrer" />
+  <title>HackerDeck 3D — Locked</title>
+  <style>
+    :root{color-scheme:dark;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#090d12;color:#eef6ff}
+    *{box-sizing:border-box}body{margin:0;min-height:100svh;background:radial-gradient(circle at 50% -10%,#173047 0,#0c131c 36%,#090d12 72%);display:grid;place-items:center;padding:24px}
+    .gate{width:min(94vw,430px);background:rgba(14,21,30,.92);border:1px solid #263545;border-radius:22px;padding:24px;box-shadow:0 24px 80px #0008;backdrop-filter:blur(12px)}
+    .eyebrow{font-size:.74rem;letter-spacing:.18em;text-transform:uppercase;color:#7dd3fc;margin-bottom:8px}.gate h1{font-size:clamp(1.7rem,6vw,2.2rem);margin:0 0 8px}.gate p{color:#a9b7c6;line-height:1.5;margin:0 0 20px}
+    label{display:block;font-size:.84rem;color:#c7d2df;margin:0 0 8px}input{width:100%;padding:14px 15px;border-radius:13px;border:1px solid #314354;background:#0a1118;color:white;font:inherit;outline:none}input:focus{border-color:#38bdf8;box-shadow:0 0 0 3px #38bdf822}
+    button{width:100%;margin-top:12px;border:0;border-radius:13px;padding:14px 16px;background:#38bdf8;color:#04121a;font:inherit;font-weight:800;cursor:pointer}button:disabled{opacity:.55;cursor:wait}
+    .status{min-height:1.4em;margin-top:12px;font-size:.86rem;color:#fca5a5}.small{font-size:.74rem;color:#6f8192;margin-top:16px}.brand{display:flex;align-items:center;gap:9px;margin-bottom:18px}.dot{width:11px;height:11px;border-radius:50%;background:#4ade80;box-shadow:0 0 18px #4ade80}
+  </style>
+</head>
+<body>
+  <main class="gate" id="gate">
+    <div class="brand"><span class="dot" aria-hidden="true"></span><strong>HackerDeck / Private Preview</strong></div>
+    <div class="eyebrow">Encrypted static build</div>
+    <h1>3D Hardware Lab</h1>
+    <p>Die eigentliche Website liegt verschlüsselt auf GitHub Pages. Ohne das Passwort wird der 3D-Inhalt nicht entschlüsselt.</p>
+    <form id="unlockForm">
+      <label for="password">Passwort</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" spellcheck="false" autofocus required />
+      <button id="unlockBtn" type="submit">Entsperren</button>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </form>
+    <div class="small">PBKDF2-SHA-256 · AES-256-GCM · Das Passwort ist nicht im ausgelieferten HTML gespeichert.</div>
+  </main>
+<script type="module">
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+const minimumIterations = 600000;
+const placeholders = ['STYLE','APPJS','BASE_PARTS','KEYBOARDS','PRICE_DATE'].map(name => `__${name}__`);
+const form = document.getElementById('unlockForm');
+const button = document.getElementById('unlockBtn');
+const status = document.getElementById('status');
+const passwordInput = document.getElementById('password');
+let appBootStarted = false;
+let fatalShown = false;
+
+function fromBase64(value) {
+  return Uint8Array.from(atob(value), character => character.charCodeAt(0));
+}
+
+function toHex(bytes) {
+  return [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
+async function sha256(value) {
+  const bytes = typeof value === 'string' ? encoder.encode(value) : value;
+  return toHex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+}
+
+function assertPayloadMetadata(metadata) {
+  if (metadata?.v !== 2 || metadata.kdf !== 'PBKDF2-SHA-256' || metadata.cipher !== 'AES-256-GCM') {
+    throw new Error('Unbekanntes Payload-Format.');
+  }
+  if (!Number.isInteger(metadata.iterations) || metadata.iterations < minimumIterations || metadata.iterations > 2000000) {
+    throw new Error('Ungültiger PBKDF2-Work-Factor.');
+  }
+  if (fromBase64(metadata.salt).length !== 16 || fromBase64(metadata.iv).length !== 12) {
+    throw new Error('Ungültige Salt- oder IV-Länge.');
+  }
+  if (!/^[a-f0-9]{64}$/.test(metadata.buildId) || !/^[a-f0-9]{64}$/.test(metadata.sourceHash)) {
+    throw new Error('Ungültige Build-Hashes.');
+  }
+  if (!Array.isArray(metadata.chunks) || metadata.chunks.length < 1 || metadata.chunks.length > 256 || new Set(metadata.chunks).size !== metadata.chunks.length) {
+    throw new Error('Ungültige Payload-Chunkliste.');
+  }
+  if (metadata.chunks.some(filename => !/^payload-[a-f0-9]{32}\.txt$/.test(filename))) {
+    throw new Error('Ungültiger Payload-Dateiname.');
+  }
+}
+
+async function deriveKey(password, salt, iterations) {
+  const base = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+}
+
+async function fetchEncryptedPayload() {
+  const metadataResponse = await fetch('./protected/payload-meta.json', { cache: 'no-store' });
+  if (!metadataResponse.ok) throw new Error('Payload-Metadaten konnten nicht geladen werden.');
+  const metadata = await metadataResponse.json();
+  assertPayloadMetadata(metadata);
+  const chunks = await Promise.all(metadata.chunks.map(async filename => {
+    const response = await fetch(`./protected/${filename}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Payload-Chunk konnte nicht geladen werden: ${filename}`);
+    const text = await response.text();
+    const expectedHash = filename.slice('payload-'.length, -'.txt'.length);
+    if ((await sha256(text)).slice(0, 32) !== expectedHash) throw new Error(`Payload-Chunk ist beschädigt: ${filename}`);
+    return text;
+  }));
+  const encryptedBytes = fromBase64(chunks.join(''));
+  if (encryptedBytes.length !== metadata.encryptedBytes || await sha256(encryptedBytes) !== metadata.buildId) {
+    throw new Error('Der verschlüsselte Build ist unvollständig oder veraltet.');
+  }
+  return { metadata, encryptedBytes };
+}
+
+async function decryptPayload(password) {
+  const { metadata, encryptedBytes } = await fetchEncryptedPayload();
+  const key = await deriveKey(password, fromBase64(metadata.salt), metadata.iterations);
+  const additionalData = encoder.encode(`hackerdeck:v2:${metadata.sourceHash}`);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(metadata.iv), additionalData }, key, encryptedBytes);
+  const payloadText = decoder.decode(plain);
+  if (await sha256(payloadText) !== metadata.sourceHash) throw new Error('Entschlüsselter Build-Hash stimmt nicht.');
+  if (placeholders.some(placeholder => payloadText.includes(placeholder))) {
+    throw new Error('Der Build enthält nicht ersetzte Platzhalter.');
+  }
+  const payload = JSON.parse(payloadText);
+  if (payload?.v !== 2 || typeof payload.html !== 'string' || typeof payload.js !== 'string') {
+    throw new Error('Entschlüsselter App-Build ist ungültig.');
+  }
+  return payload;
+}
+
+function replaceDocumentShell(html) {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  if (!parsed.head || !parsed.body || parsed.querySelector('script')) {
+    throw new Error('App-Shell enthält unerwartete oder ausführbare Inhalte.');
+  }
+  for (const attribute of [...document.documentElement.attributes]) document.documentElement.removeAttribute(attribute.name);
+  for (const attribute of [...parsed.documentElement.attributes]) document.documentElement.setAttribute(attribute.name, attribute.value);
+  document.head.replaceWith(document.adoptNode(parsed.head));
+  document.body.replaceWith(document.adoptNode(parsed.body));
+}
+
+function showFatal(error) {
+  if (fatalShown) return;
+  fatalShown = true;
+  const overlay = document.createElement('div');
+  overlay.className = 'fatalOverlay';
+  const card = document.createElement('section');
+  card.className = 'fatalCard';
+  card.setAttribute('role', 'alert');
+  const heading = document.createElement('h2');
+  heading.textContent = 'HackerDeck konnte nicht initialisiert werden';
+  const copy = document.createElement('p');
+  copy.textContent = 'Der entschlüsselte Build wurde geladen, aber die Anwendung ist beim Start fehlgeschlagen.';
+  const details = document.createElement('details');
+  const summary = document.createElement('summary');
+  summary.textContent = 'Diagnose öffnen';
+  const diagnostics = document.createElement('pre');
+  diagnostics.textContent = error?.stack || error?.message || String(error);
+  const reload = document.createElement('button');
+  reload.type = 'button';
+  reload.textContent = 'Seite neu laden';
+  reload.addEventListener('click', () => location.reload());
+  details.append(summary, diagnostics);
+  card.append(heading, copy, details, reload);
+  overlay.append(card);
+  document.body.append(overlay);
+}
+
+window.addEventListener('error', event => {
+  if (appBootStarted) showFatal(event.error || new Error(event.message));
+});
+window.addEventListener('unhandledrejection', event => {
+  if (appBootStarted) showFatal(event.reason instanceof Error ? event.reason : new Error(String(event.reason)));
+});
+
+async function startApplication(payload) {
+  replaceDocumentShell(payload.html);
+  appBootStarted = true;
+  const moduleUrl = URL.createObjectURL(new Blob([payload.js], { type: 'text/javascript' }));
+  try {
+    await import(moduleUrl);
+    if (document.documentElement.dataset.hackerdeckReady !== 'true') {
+      throw new Error('App-Modul wurde ausgewertet, hat aber kein Bereitschaftssignal gesetzt.');
+    }
+  } catch (error) {
+    console.error('HackerDeck initialization failed', error);
+    showFatal(error);
+    throw error;
+  } finally {
+    URL.revokeObjectURL(moduleUrl);
+  }
+}
+
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  const password = passwordInput.value;
+  if (!password) {
+    status.textContent = 'Bitte Passwort eingeben.';
+    return;
+  }
+  button.disabled = true;
+  status.style.color = '#a9b7c6';
+  status.textContent = 'Entschlüssele und prüfe Build…';
+  try {
+    const payload = await decryptPayload(password);
+    passwordInput.value = '';
+    await startApplication(payload);
+  } catch (error) {
+    if (appBootStarted) return;
+    console.error('HackerDeck unlock failed', error);
+    status.style.color = '#fca5a5';
+    status.textContent = 'Falsches Passwort oder beschädigter Build.';
+    passwordInput.select();
+    button.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

@@ -6,36 +6,29 @@
   <meta name="theme-color" content="#070b10" />
   <title>HackerDeck 3D Hardware Lab</title>
   <style>__STYLE__</style>
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
-    }
-  }
-  </script>
 </head>
 <body>
 <div class="app">
   <header class="topbar">
-    <div class="brand"><span class="brandmark"></span><div class="brandtext">HACKERDECK <span>/ 3D HARDWARE LAB</span></div></div>
-    <div class="topstatus"><span class="pill hideMobile">ESP32-S3 + C5</span><span class="pill" id="headerPrice">€—</span><div class="mobileTabs"><button class="ghost" id="openParts">Teile</button><button class="ghost" id="openInfo">Preis</button></div></div>
+    <div class="brand"><span class="brandmark" aria-hidden="true"></span><h1 class="brandtext">HACKERDECK <span>/ 3D HARDWARE LAB</span></h1></div>
+    <div class="topstatus"><span class="pill hideMobile">ESP32-S3 + C5</span><span class="pill" id="headerPrice">€—</span><div class="mobileTabs"><button class="ghost partsTrigger" id="openParts" type="button" aria-controls="sidebar" aria-expanded="false">Teile</button><button class="ghost" id="openInfo" type="button" aria-controls="inspector" aria-expanded="false">Preis</button></div></div>
   </header>
   <main class="workspace">
     <aside class="sidebar" id="sidebar">
       <section class="panel">
         <h2>Konfiguration</h2>
-        <div class="label"><span>Tastatur</span><span class="value" id="kbdDims">—</span></div>
+        <div class="label"><label for="keyboardSelect">Tastatur</label><span class="value" id="kbdDims">—</span></div>
         <select id="keyboardSelect" class="select"></select>
         <div style="height:10px"></div>
         <div class="kbdCard"><div class="kbdTitle" id="kbdTitle"></div><div class="kbdMeta" id="kbdMeta"></div><div class="recommend" id="kbdRecommend"></div></div>
       </section>
       <section class="panel">
         <h3>Ansicht</h3>
-        <div class="seg"><button data-view="assembly" class="active">Gerät</button><button data-view="exploded">Exploded</button><button data-view="component">Bauteil</button></div>
+        <div class="seg" role="group" aria-label="3D-Ansicht"><button data-view="assembly" class="active" type="button" aria-pressed="true">Gerät</button><button data-view="exploded" type="button" aria-pressed="false">Exploded</button><button data-view="component" type="button" aria-pressed="false">Bauteil</button></div>
         <div style="height:12px"></div>
-        <div class="label"><span>Explosion</span><span class="value" id="explodeValue">0%</span></div>
-        <input id="explode" type="range" min="0" max="100" value="0" />
+        <div class="label"><label for="explode">Explosion</label><output class="value" id="explodeValue" for="explode">0%</output></div>
+        <input id="explode" type="range" min="0" max="100" value="0" aria-describedby="explodeHelp" />
+        <span class="srOnly" id="explodeHelp">Steuert den Abstand der Bauteile in der Explosionsansicht.</span>
         <div style="height:10px"></div>
         <button class="ghost" id="resetCamera" style="width:100%">Kamera zurücksetzen</button>
       </section>
@@ -45,34 +38,35 @@
       </section>
       <section class="panel">
         <div class="label"><h3 style="margin:0">Komponenten</h3><span>antippen = isolieren</span></div>
-        <div class="componentList" id="componentList"></div>
+        <div class="componentList" id="componentList" role="list"></div>
       </section>
       <div class="footerNote">3D-Modelle sind maßstäbliche Layout-Modelle auf Basis der angegebenen bzw. recherchierten Abmessungen, keine fertigen STEP/CAD-Produktmodelle. Vor PCB/3D-Druck müssen echte Bauteile nachgemessen werden.</div>
     </aside>
 
     <section class="stage">
-      <canvas id="canvas"></canvas>
+      <canvas id="canvas" aria-label="Interaktives 3D-Modell des HackerDecks. Mit Ziehen drehen, mit Mausrad oder Pinch zoomen.">Ihr Browser unterstützt die interaktive 3D-Ansicht nicht.</canvas>
       <div class="stagehud"><div class="hudgroup"><span class="hudchip" id="modeChip">ASSEMBLY</span><span class="hudchip" id="kbdChip">—</span></div><div class="hudgroup"><span class="hudchip">Drag: drehen</span><span class="hudchip">Pinch/Wheel: zoom</span></div></div>
+      <div class="cameraTools" role="group" aria-label="Kamerasteuerung"><button type="button" data-camera="left" aria-label="Modell nach links drehen">↶</button><button type="button" data-camera="right" aria-label="Modell nach rechts drehen">↷</button><button type="button" data-camera="in" aria-label="Ansicht vergrößern">+</button><button type="button" data-camera="out" aria-label="Ansicht verkleinern">−</button></div>
       <div class="legend" id="legend">Das Gehäuse wird automatisch an die gewählte Tastatur angepasst. Mit „Exploded“ kannst du die Innenteile auseinanderziehen.</div>
     </section>
 
     <aside class="inspector" id="inspector">
       <section class="panel">
         <div class="label"><span>Gesamtpreis</span><span class="tag" id="priceDate">Stand —</span></div>
-        <div class="priceTotal" id="totalPrice">€—</div>
+        <div class="priceTotal" id="totalPrice" aria-live="polite">€—</div>
         <div class="priceNote">Ohne Versand. Gelbe „Schätzung“-Positionen sind keine Live-Shoppreise. Die Summe ändert sich mit der Tastatur.</div>
       </section>
       <section class="panel">
         <h3>Gewählte Tastatur</h3>
-        <div class="partsTable" id="keyboardPrice"></div>
+        <div class="partsTable" id="keyboardPrice" role="list"></div>
       </section>
       <section class="panel">
         <h3>Stückliste</h3>
-        <div class="partsTable" id="partsTable"></div>
+        <div class="partsTable" id="partsTable" role="list"></div>
       </section>
     </aside>
   </main>
+  <button class="drawerBackdrop" id="drawerBackdrop" type="button" aria-label="Geöffnetes Seitenpanel schließen" hidden></button>
 </div>
-<script type="module">__APPJS__</script>
 </body>
 </html>
