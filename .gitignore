@@ -2,3 +2,6 @@
 node_modules/
 .env
 .env.*
+.hackerdeck-site-build-*/
+site.backup-*/
+site/

@@ -1,66 +1,68 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { baseParts, keyboards, PRICE_DATE } from '../src/data.js';
+import { build as bundle } from 'esbuild';
+import { assertNoPlaceholders, sha256, validateArtifact } from './lib/artifact.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
-const protectedDir = path.join(root, 'site/protected');
-const password = process.env.HACKERDECK_PASSWORD;
+const outputDir = process.env.HACKERDECK_OUTPUT_DIR
+  ? path.resolve(root, process.env.HACKERDECK_OUTPUT_DIR)
+  : path.join(root, 'site');
 
-if (!password || password.length < 14) {
-  console.error('Set HACKERDECK_PASSWORD to at least 14 characters.');
-  process.exit(1);
-}
-
-const style = fs.readFileSync(path.join(root, 'src/style.css'), 'utf8');
-let js = fs.readFileSync(path.join(root, 'src/app.js'), 'utf8');
-js = js
-  .replace('__BASE_PARTS__', JSON.stringify(baseParts))
-  .replace('__KEYBOARDS__', JSON.stringify(keyboards))
-  .replace('__PRICE_DATE__', PRICE_DATE);
-
-const html = fs
-  .readFileSync(path.join(root, 'src/app.html'), 'utf8')
-  .replace('__STYLE__', style)
-  .replace('__APPJS__', js);
-
-const salt = crypto.randomBytes(16);
-const iv = crypto.randomBytes(12);
-const iterations = 310000;
-const key = crypto.pbkdf2Sync(password, salt, iterations, 32, 'sha256');
-const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-const encrypted = Buffer.concat([cipher.update(html, 'utf8'), cipher.final()]);
-const tag = cipher.getAuthTag();
-// WebCrypto AES-GCM expects ciphertext || 16-byte authentication tag.
-const payloadBase64 = Buffer.concat([encrypted, tag]).toString('base64');
-
-fs.mkdirSync(protectedDir, { recursive: true });
-for (const file of fs.readdirSync(protectedDir)) {
-  if (/^payload-\d+\.txt$/.test(file) || file === 'payload-meta.json' || file === 'payload.json') {
-    fs.rmSync(path.join(protectedDir, file));
+function promoteDirectory(stagingDir, destinationDir) {
+  const backupDir = `${destinationDir}.backup-${process.pid}-${Date.now()}`;
+  const hadDestination = fs.existsSync(destinationDir);
+  if (hadDestination) fs.renameSync(destinationDir, backupDir);
+  try {
+    fs.renameSync(stagingDir, destinationDir);
+    if (hadDestination) fs.rmSync(backupDir, { recursive: true, force: true });
+  } catch (error) {
+    if (fs.existsSync(destinationDir)) fs.rmSync(destinationDir, { recursive: true, force: true });
+    if (hadDestination && fs.existsSync(backupDir)) fs.renameSync(backupDir, destinationDir);
+    throw error;
   }
 }
 
-const CHUNK_SIZE = 6000;
-const chunks = [];
-for (let offset = 0, index = 0; offset < payloadBase64.length; offset += CHUNK_SIZE, index += 1) {
-  const filename = `payload-${String(index).padStart(2, '0')}.txt`;
-  fs.writeFileSync(path.join(protectedDir, filename), payloadBase64.slice(offset, offset + CHUNK_SIZE));
-  chunks.push(filename);
+const result = await bundle({
+  absWorkingDir: root,
+  entryPoints: ['src/app.js'],
+  bundle: true,
+  format: 'esm',
+  platform: 'browser',
+  target: ['es2022'],
+  write: false,
+  minify: true,
+  legalComments: 'none',
+  sourcemap: false,
+  metafile: true,
+  logLevel: 'silent'
+});
+if (result.outputFiles.length !== 1) throw new Error('Expected one bundled application module.');
+const externalImports = Object.values(result.metafile.outputs).flatMap(output => output.imports).filter(item => item.external);
+if (externalImports.length) throw new Error(`Application bundle still has external imports: ${externalImports.map(item => item.path).join(', ')}`);
+
+const appJs = result.outputFiles[0].text;
+const assetFilename = `app-${sha256(appJs).slice(0, 32)}.js`;
+const style = fs.readFileSync(path.join(root, 'src/style.css'), 'utf8');
+const indexHtml = fs
+  .readFileSync(path.join(root, 'src/app.html'), 'utf8')
+  .replace('__STYLE__', () => style)
+  .replace('__APP_SCRIPT__', () => `./assets/${assetFilename}`);
+assertNoPlaceholders('Generated index', indexHtml);
+
+fs.mkdirSync(path.dirname(outputDir), { recursive: true });
+const stagingDir = fs.mkdtempSync(path.join(path.dirname(outputDir), '.hackerdeck-site-build-'));
+try {
+  fs.mkdirSync(path.join(stagingDir, 'assets'));
+  fs.writeFileSync(path.join(stagingDir, 'index.html'), indexHtml);
+  fs.writeFileSync(path.join(stagingDir, 'assets', assetFilename), appJs);
+  fs.writeFileSync(path.join(stagingDir, 'robots.txt'), 'User-agent: *\nAllow: /\n');
+  fs.writeFileSync(path.join(stagingDir, '.nojekyll'), '\n');
+  validateArtifact(stagingDir);
+  promoteDirectory(stagingDir, outputDir);
+  console.log(`Built passwordless static site with ${assetFilename}.`);
+} catch (error) {
+  fs.rmSync(stagingDir, { recursive: true, force: true });
+  throw error;
 }
-
-const meta = {
-  v: 1,
-  kdf: 'PBKDF2-SHA-256',
-  cipher: 'AES-GCM',
-  iterations,
-  salt: salt.toString('base64'),
-  iv: iv.toString('base64'),
-  builtAt: new Date().toISOString(),
-  chunks
-};
-fs.writeFileSync(path.join(protectedDir, 'payload-meta.json'), JSON.stringify(meta));
-
-console.log(`Built encrypted payload: ${(payloadBase64.length / 1024).toFixed(1)} KiB base64 in ${chunks.length} chunks.`);

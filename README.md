@@ -1,39 +1,38 @@
 # HackerDeck 3D Hardware Lab
 
-Private source repository for the ESP32-S3 + ESP32-C5 HackerDeck 3D configurator.
+Public source repository for the ESP32-S3 + ESP32-C5 HackerDeck 3D configurator.
 
 ## Features
-- Interactive Three.js 3D assembly
-- Exploded view slider
-- Per-component isolate/3D mode
-- Procedural 3D case that resizes with the selected keyboard
-- Keyboard selector: CardKB, KeebDeck, Rii X1/i10/i4/i8/i8+/X8/X8+/i8X/i8S/K06/518BT/V3/RK707/i12+, BlackBerry BBQ10/20/9900
-- Mobile/touch friendly OrbitControls
-- Current/estimated BOM prices with source links and dynamic total
-- Static-site encryption: PBKDF2-SHA-256 + AES-256-GCM
 
-## Security model
-This repository stays **private** and contains the plaintext source in `src/`.
+- Interactive bundled Three.js assembly with no runtime CDN dependency
+- Exploded and component-isolation views
+- Procedural case sizing for 19 keyboard options
+- Dimension and availability notes backed by source links
+- Responsive keyboard, touch, mouse and accessible camera controls
+- Dynamic BOM pricing
 
-The public GitHub Pages repository must contain **only** the contents of `site/`: the login shell plus the encrypted payload chunks. The password is **not** stored in the published HTML or payload metadata.
+## Local development
 
-This is still a static encrypted site: a strong password matters because anyone can download the encrypted payload and attempt offline guesses.
-
-## Rebuild encrypted payload
 ```bash
-HACKERDECK_PASSWORD='your-long-password' npm run build
+npm ci
+npm test
+npm run build
+npm run verify
+python3 -m http.server --directory site 4173
 ```
-Then publish only `site/index.html`, `site/robots.txt`, `site/.nojekyll`, and `site/protected/*` to the separate public Pages repository.
 
-## GitHub Pages architecture
-- `en-code23/hackerdeck-3d` — private source repository; never enable public Pages here.
-- Separate public deploy repository — contains only encrypted/static `site/` output and hosts GitHub Pages.
+Open `http://127.0.0.1:4173/`. The generated `site/` directory is ignored by Git and contains only the deployable static artifact.
 
-## Price policy
-Prices are a snapshot for 2026-08-16 and exclude shipping. Items marked `estimate` are layout-budget estimates, not verified live prices. Update `src/data.js`, rebuild, then publish the new encrypted payload.
+## GitHub Pages
 
-## CAD disclaimer
-The 3D geometry is a dimensionally useful layout visualization, not manufacturing CAD. Measure the exact purchased modules before designing a PCB or printable enclosure.
+Pushing to `main` runs `.github/workflows/pages.yml`. The workflow installs locked dependencies, runs the test suite, builds and validates `site/`, then deploys that exact artifact to GitHub Pages.
+
+Live URL: <https://en-code23.github.io/hackerdeck-3d/>
+
+## Data and CAD disclaimer
+
+Prices are a snapshot for 2026-08-16 and exclude shipping. Estimated or unverified measurements are marked in `src/data.js`. The 3D geometry is a layout visualization, not manufacturing CAD; measure purchased modules before designing a PCB or printable enclosure.
 
 ## License
+
 MIT License — see [`LICENSE`](LICENSE).
