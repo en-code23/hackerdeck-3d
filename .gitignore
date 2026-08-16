@@ -4,3 +4,4 @@ node_modules/
 .env.*
 .hackerdeck-site-build-*/
 site.backup-*/
+site/
