@@ -1,0 +1,14 @@
+{
+  "name": "hackerdeck-3d",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "description": "Interactive 3D configurator for a modular ESP32-S3/C5 HackerDeck handheld with exploded views, swappable keyboards, component inspection and BOM pricing.",
+  "license": "MIT"
+}
