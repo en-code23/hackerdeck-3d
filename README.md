@@ -5,8 +5,10 @@ Public source repository for the ESP32-S3 + ESP32-C5 HackerDeck 3D configurator.
 ## Features
 
 - Interactive bundled Three.js assembly with no runtime CDN dependency
-- Exploded and component-isolation views
-- Procedural case sizing for 19 keyboard options
+- Fog-free CAD workbench with ISO/front/top/right views, grid and XYZ axes
+- Selectable, movable and rotatable assembly components with numeric offsets, snapping and reset
+- Exploded, X-ray and component-isolation views
+- Procedural case sizing and a clearance-aware rear keyboard pocket for 19 keyboard options
 - Dimension and availability notes backed by source links
 - Responsive keyboard, touch, mouse and accessible camera controls
 - Dynamic BOM pricing
@@ -22,6 +24,8 @@ python3 -m http.server --directory site 4173
 ```
 
 Open `http://127.0.0.1:4173/`. The generated `site/` directory is ignored by Git and contains only the deployable static artifact.
+
+Select any part in the viewport or component list. Drag the transform gizmo or edit its XYZ offsets; `G` selects move and `R` selects rotate. The keyboard body is recessed behind the front faceplate so only the keys and touch surface remain exposed.
 
 ## GitHub Pages
 
