@@ -3,13 +3,15 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { baseParts, keyboards, PRICE_DATE } from './data.js';
 import { caseLayoutFor } from './layout.js';
+import { normalizeProject, projectFilename, PROJECT_SCHEMA_VERSION } from './project.js';
 
 const query = selector => document.querySelector(selector);
 const queryAll = selector => [...document.querySelectorAll(selector)];
 const euroFormatter = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 const euro = value => euroFormatter.format(value);
-const formatMm = value => `${Math.round(value * 10) / 10} mm`;
 const partById = new Map(baseParts.map(part => [part.id, part]));
+const PROJECTS_STORAGE_KEY = 'hackerdeck-projects-v1';
+const ACTIVE_PROJECT_STORAGE_KEY = 'hackerdeck-active-project-v1';
 
 const canvas = query('#canvas');
 if (!canvas) throw new Error('3D-Canvas wurde nicht gefunden.');
@@ -99,16 +101,26 @@ const materials = {
   switch: new THREE.MeshStandardMaterial({ color: 0xe3e8ed, roughness: 0.5 }),
   key: new THREE.MeshStandardMaterial({ color: 0x263844, roughness: 0.56, metalness: 0.08 }),
   antenna: new THREE.MeshStandardMaterial({ color: 0x111316, roughness: 0.45 }),
-  rj45: new THREE.MeshStandardMaterial({ color: 0x9aa9b4, metalness: 0.7, roughness: 0.25 })
+  rj45: new THREE.MeshStandardMaterial({ color: 0x9aa9b4, metalness: 0.7, roughness: 0.25 }),
+  breadboard: new THREE.MeshStandardMaterial({ color: 0xe7e5dc, roughness: 0.72 }),
+  breadboardRed: new THREE.MeshStandardMaterial({ color: 0xc85151, roughness: 0.58 }),
+  breadboardBlue: new THREE.MeshStandardMaterial({ color: 0x3977b8, roughness: 0.58 }),
+  hinge: new THREE.MeshStandardMaterial({ color: 0x77848c, metalness: 0.78, roughness: 0.26 })
 };
 const sharedMaterials = new Set(Object.values(materials));
 
-const state = { keyboard: 'cardkb', mode: 'assembly', explode: 0, selected: null, transformMode: 'translate', snap: true, xray: false };
+const state = { keyboard: 'cardkb', caseSize: null, mode: 'assembly', explode: 0, selected: null, transformMode: 'translate', snap: true, xray: false };
 const objects = new Map();
 const editTransforms = new Map();
+const projectLibrary = new Map();
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let currentCase = caseLayoutFor(keyboards[0]);
+let activeProject = null;
+let projectSaveTimer = 0;
+let caseResizeTimer = 0;
+let toastTimer = 0;
+let loadingProject = false;
 let hasBuilt = false;
 let renderQueued = true;
 let renderRequest = 0;
@@ -205,9 +217,8 @@ function pcbWithPins(group, width, height, depth = 2) {
   }
 }
 
-function buildShell(keyboard) {
-  const size = caseLayoutFor(keyboard);
-  currentCase = size;
+function buildShell() {
+  const size = currentCase;
   const group = componentGroup('shell', 'Gehäuse');
   const front = box('front panel', [size.w, size.h, 3], [0, 0, size.d / 2 - 1.5], materials.shell, group);
   const back = box('back panel', [size.w, size.h, 3], [0, 0, -size.d / 2 + 1.5], materials.shell, group);
@@ -307,6 +318,36 @@ function buildMicroSD() {
   box('microSD', [11, 15, 1], [0, 0, 0], materials.black, group);
 }
 
+function buildBreadboard() {
+  const [width, height, depth] = partById.get('breadboard').dims;
+  const group = componentGroup('breadboard', 'Mini Breadboard', [-currentCase.w / 2 + 30, 2, -currentCase.d / 2 + depth / 2 + 2]);
+  box('breadboard body', [width, height, depth], [0, 0, 0], materials.breadboard, group);
+  box('center channel', [width - 5, 2.2, 0.8], [0, 0, depth / 2 + 0.35], materials.shellEdge, group);
+  box('positive rail', [width - 5, 0.8, 0.5], [0, height / 2 - 3, depth / 2 + 0.55], materials.breadboardRed, group);
+  box('negative rail', [width - 5, 0.8, 0.5], [0, -height / 2 + 3, depth / 2 + 0.55], materials.breadboardBlue, group);
+  for (let column = 0; column < 12; column += 1) {
+    for (let row = 0; row < 6; row += 1) {
+      const x = -19.25 + column * 3.5;
+      const y = -10.5 + row * 4.2;
+      cylinder('contact hole', 0.62, 0.7, [x, y, depth / 2 + 0.45], [Math.PI / 2, 0, 0], materials.black, group);
+    }
+  }
+}
+
+function buildHinges() {
+  const hingeY = currentCase.h / 2 - 7;
+  const hingeZ = -currentCase.d / 2 - 1.4;
+  for (const [id, x, label] of [
+    ['hingeLeft', -currentCase.w / 2 + 22, 'Scharnier links'],
+    ['hingeRight', currentCase.w / 2 - 22, 'Scharnier rechts']
+  ]) {
+    const group = componentGroup(id, label, [x, hingeY, hingeZ]);
+    box('hinge upper leaf', [17, 7, 1.8], [0, 4.2, 0], materials.hinge, group);
+    box('hinge lower leaf', [17, 7, 1.8], [0, -4.2, 0], materials.hinge, group);
+    cylinder('hinge pin', 2.2, 19, [0, 0, 1.2], [0, 0, Math.PI / 2], materials.metal, group);
+  }
+}
+
 function buildKeyboard(keyboard) {
   const group = componentGroup('keyboard', keyboard.name, [0, currentCase.keyboardY, currentCase.keyboardZ]);
   const [width, height, depth] = keyboard.dims;
@@ -354,7 +395,8 @@ const explosionVectors = {
   shell: [0, 0, 0], keyboardPocket: [0, -0.75, -0.8], display: [0, 1, 0.8], s3: [1, 0.15, 0.55], c5: [1, -0.2, 0.35],
   w5500: [-1, 0.2, 0.2], batteryShield: [0, -0.35, -0.7], batteryA: [-0.55, -0.2, 0.55],
   batteryB: [0.55, -0.2, 0.55], usbC: [1, -0.8, 0.1], wifiAnt: [1, 0.8, 0.2],
-  btAnt: [-1, 0.75, -0.1], nav: [0, 0.4, 1], microsd: [-0.2, 0.2, 0.7], keyboard: [0, -1, 0.8]
+  btAnt: [-1, 0.75, -0.1], nav: [0, 0.4, 1], microsd: [-0.2, 0.2, 0.7], breadboard: [-0.65, 0.1, -0.85],
+  hingeLeft: [-0.5, 0.75, -0.55], hingeRight: [0.5, 0.75, -0.55], keyboard: [0, -1, 0.8]
 };
 
 function updateViewControls() {
@@ -406,6 +448,7 @@ function rememberTransform(group) {
     rotation: group.userData.editRotation.clone()
   });
   updateViewControls();
+  markProjectChanged();
 }
 
 function syncTransformAttachment() {
@@ -453,6 +496,7 @@ function resetSelectedTransform() {
   object.userData.editRotation.set(0, 0, 0);
   editTransforms.delete(`${state.keyboard}:${state.selected}`);
   applyMode();
+  markProjectChanged();
 }
 
 function applyMode() {
@@ -513,13 +557,16 @@ function selectComponent(id) {
   if (!objects.has(id)) return;
   state.selected = id;
   applyMode();
+  if (state.mode === 'component') fitCamera(objects.get(id));
   canvas.focus({ preventScroll: true });
 }
 
 function buildAll() {
   clearRoot();
   const keyboard = keyboards.find(item => item.id === state.keyboard) || keyboards[0];
-  buildShell(keyboard);
+  currentCase = caseLayoutFor(keyboard, state.caseSize);
+  if (state.caseSize) state.caseSize = { w: currentCase.w, h: currentCase.h, d: currentCase.d };
+  buildShell();
   buildKeyboardPocket();
   buildDisplay();
   buildS3();
@@ -531,6 +578,8 @@ function buildAll() {
   buildAntennas();
   buildNavigation();
   buildMicroSD();
+  buildBreadboard();
+  buildHinges();
   buildKeyboard(keyboard);
   ground.position.y = -currentCase.h / 2 - 0.5;
   grid.position.y = ground.position.y + 0.1;
@@ -580,6 +629,197 @@ function priceRow(item, total, metaText) {
   return row;
 }
 
+function projectId() {
+  return crypto.randomUUID?.() || `deck-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function blankProject(name = 'Untitled Deck') {
+  return normalizeProject({
+    version: PROJECT_SCHEMA_VERSION,
+    id: projectId(),
+    name,
+    updatedAt: new Date().toISOString(),
+    keyboard: 'cardkb',
+    caseSize: null,
+    transforms: {},
+    view: { mode: 'assembly', explode: 0, xray: false }
+  });
+}
+
+function serializedTransforms() {
+  return Object.fromEntries([...editTransforms].map(([key, transform]) => [key, {
+    position: [transform.position.x, transform.position.y, transform.position.z],
+    rotation: [transform.rotation.x, transform.rotation.y, transform.rotation.z]
+  }]));
+}
+
+function currentProjectSnapshot() {
+  return normalizeProject({
+    version: PROJECT_SCHEMA_VERSION,
+    id: activeProject.id,
+    name: activeProject.name,
+    updatedAt: new Date().toISOString(),
+    keyboard: state.keyboard,
+    caseSize: state.caseSize ? [state.caseSize.w, state.caseSize.h, state.caseSize.d] : null,
+    transforms: serializedTransforms(),
+    view: { mode: state.mode, explode: state.explode, xray: state.xray }
+  });
+}
+
+function showToast(message, tone = 'success') {
+  const toast = query('#toast');
+  clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.dataset.tone = tone;
+  toast.hidden = false;
+  toastTimer = window.setTimeout(() => { toast.hidden = true; }, 2600);
+}
+
+function setSaveState(label, value) {
+  const element = query('#saveState');
+  element.textContent = label;
+  element.dataset.state = value;
+}
+
+function updateProjectUI() {
+  if (!activeProject) return;
+  query('#projectChip').textContent = activeProject.name.toUpperCase();
+  const select = query('#projectSelect');
+  const projects = [...projectLibrary.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  select.replaceChildren(...projects.map(project => {
+    const option = document.createElement('option');
+    option.value = project.id;
+    option.textContent = project.name;
+    return option;
+  }));
+  select.value = activeProject.id;
+}
+
+function writeProjectLibrary() {
+  try {
+    localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify([...projectLibrary.values()]));
+    localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, activeProject.id);
+    return true;
+  } catch {
+    showToast('Lokales Speichern ist in diesem Browser blockiert.', 'error');
+    return false;
+  }
+}
+
+function saveActiveProject({ notify = false } = {}) {
+  if (!activeProject) return null;
+  clearTimeout(projectSaveTimer);
+  const snapshot = currentProjectSnapshot();
+  activeProject = snapshot;
+  projectLibrary.set(snapshot.id, snapshot);
+  const stored = writeProjectLibrary();
+  setSaveState(stored ? 'GESPEICHERT' : 'NUR SITZUNG', stored ? 'saved' : 'error');
+  updateProjectUI();
+  if (notify && stored) showToast(`„${snapshot.name}“ gespeichert.`);
+  return snapshot;
+}
+
+function markProjectChanged() {
+  if (loadingProject || !activeProject) return;
+  setSaveState('SPEICHERT…', 'saving');
+  clearTimeout(projectSaveTimer);
+  projectSaveTimer = window.setTimeout(() => saveActiveProject(), 450);
+}
+
+function hydrateProject(project) {
+  loadingProject = true;
+  activeProject = project;
+  state.keyboard = keyboards.some(item => item.id === project.keyboard) ? project.keyboard : 'cardkb';
+  state.caseSize = project.caseSize ? { w: project.caseSize[0], h: project.caseSize[1], d: project.caseSize[2] } : null;
+  state.mode = project.view.mode;
+  state.explode = project.view.explode;
+  state.xray = project.view.xray;
+  state.selected = null;
+  editTransforms.clear();
+  for (const [key, transform] of Object.entries(project.transforms)) {
+    editTransforms.set(key, {
+      position: new THREE.Vector3(...transform.position),
+      rotation: new THREE.Euler(...transform.rotation)
+    });
+  }
+}
+
+function openProjectSnapshot(project, announce = false) {
+  saveActiveProject();
+  hydrateProject(project);
+  query('#keyboardSelect').value = state.keyboard;
+  buildAll();
+  setXray(state.xray);
+  fitCamera(root);
+  updateProjectUI();
+  loadingProject = false;
+  setSaveState('GESPEICHERT', 'saved');
+  if (announce) showToast(`„${project.name}“ geöffnet.`);
+}
+
+function initializeProjects() {
+  let activeId = '';
+  try {
+    const stored = JSON.parse(localStorage.getItem(PROJECTS_STORAGE_KEY) || '[]');
+    if (Array.isArray(stored)) {
+      for (const value of stored) {
+        try {
+          const project = normalizeProject(value);
+          projectLibrary.set(project.id, project);
+        } catch {
+          // Ignore corrupt individual records without losing valid projects.
+        }
+      }
+    }
+    activeId = localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY) || '';
+  } catch {
+    // Storage may be unavailable; the in-memory project still works.
+  }
+  const project = projectLibrary.get(activeId) || [...projectLibrary.values()][0] || blankProject('My HackerDeck');
+  projectLibrary.set(project.id, project);
+  hydrateProject(project);
+}
+
+function createDeckProject(name) {
+  saveActiveProject();
+  const project = blankProject(name);
+  projectLibrary.set(project.id, project);
+  openProjectSnapshot(project);
+  saveActiveProject();
+  showToast(`„${project.name}“ erstellt.`);
+}
+
+function downloadActiveProject() {
+  const project = saveActiveProject();
+  if (!project) return;
+  const blob = new Blob([`${JSON.stringify(project, null, 2)}\n`], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = projectFilename(project.name);
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  showToast(`${link.download} heruntergeladen.`);
+}
+
+async function importProjectFile(file) {
+  try {
+    const imported = normalizeProject(JSON.parse(await file.text()));
+    const collision = projectLibrary.has(imported.id);
+    const project = collision
+      ? normalizeProject({ ...imported, id: projectId(), name: `${imported.name} (Import)`, updatedAt: new Date().toISOString() })
+      : imported;
+    projectLibrary.set(project.id, project);
+    openProjectSnapshot(project);
+    saveActiveProject();
+    showToast(`„${project.name}“ importiert.`);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Projekt konnte nicht geöffnet werden.', 'error');
+  }
+}
+
 function updateUI() {
   const keyboard = keyboards.find(item => item.id === state.keyboard) || keyboards[0];
   query('#kbdDims').textContent = `${keyboard.dims.join('×')} mm`;
@@ -595,15 +835,22 @@ function updateUI() {
           ? 'Rii vergrößert das Gerät; USB-Host beziehungsweise Bluetooth-Integration separat prüfen.'
           : 'Alternative Eingabeoption; Verfügbarkeit vor dem Kauf prüfen.';
   query('#kbdChip').textContent = keyboard.name;
-  query('#dimW').textContent = formatMm(currentCase.w);
-  query('#dimH').textContent = formatMm(currentCase.h);
-  query('#dimD').textContent = formatMm(currentCase.d);
+  const caseInputs = { w: query('#caseWidth'), h: query('#caseHeight'), d: query('#caseDepth') };
+  for (const [axis, input] of Object.entries(caseInputs)) {
+    input.value = String(currentCase[axis]);
+    input.min = String(currentCase.minimum[axis]);
+  }
+  const customCase = currentCase.customized;
+  query('#caseMode').textContent = customCase ? 'CUSTOM' : 'AUTO-FIT';
+  query('#caseMode').classList.toggle('custom', customCase);
+  query('#caseMinimum').textContent = `Minimum für Tastatur: ${currentCase.minimum.w} × ${currentCase.minimum.h} × ${currentCase.minimum.d} mm`;
   const total = basePrice() + keyboard.price;
   query('#totalPrice').textContent = euro(total);
   query('#headerPrice').textContent = euro(total);
   query('#priceDate').textContent = `Stand ${PRICE_DATE}`;
   query('#keyboardPrice').replaceChildren(priceRow(keyboard, keyboard.price, `${keyboard.interface} · ${keyboard.dims.join(' × ')} mm`));
   query('#partsTable').replaceChildren(...baseParts.map(part => priceRow(part, part.price * part.qty, part.qty > 1 ? `${part.qty} × ${euro(part.price)} · ` : '')));
+  updateProjectUI();
   updateViewControls();
 }
 
@@ -742,6 +989,7 @@ query('#keyboardSelect').addEventListener('change', event => {
   setViewMode('assembly');
   buildAll();
   fitCamera(root);
+  markProjectChanged();
 });
 
 query('#explode').addEventListener('input', event => {
@@ -750,23 +998,29 @@ query('#explode').addEventListener('input', event => {
   state.mode = value > 0 ? 'exploded' : 'assembly';
   applyMode();
   fitCamera(root);
+  markProjectChanged();
 });
 
 for (const button of queryAll('.seg button')) {
   button.addEventListener('click', () => {
     const mode = button.dataset.view;
     if (mode === 'component') {
-      selectComponent(state.selected || 's3');
+      setViewMode('component', state.selected || 's3');
+      fitCamera(objects.get(state.selected));
     } else {
       setViewMode(mode);
       fitCamera(root);
     }
+    markProjectChanged();
   });
 }
 
 query('#resetCamera').addEventListener('click', () => fitCamera(state.mode === 'component' && state.selected ? objects.get(state.selected) : root));
 query('#resetPart').addEventListener('click', resetSelectedTransform);
-query('#toggleXray').addEventListener('click', () => setXray(!state.xray));
+query('#toggleXray').addEventListener('click', () => {
+  setXray(!state.xray);
+  markProjectChanged();
+});
 query('#toggleSnap').addEventListener('click', () => {
   state.snap = !state.snap;
   transformControls.setTranslationSnap(state.snap ? 1 : null);
@@ -788,8 +1042,62 @@ for (const input of queryAll('.axisGrid input')) {
       rotation: object.userData.editRotation.clone()
     });
     applyMode();
+    markProjectChanged();
   });
 }
+function applyCaseInput(input) {
+  clearTimeout(caseResizeTimer);
+  if (!input.value.trim() || !Number.isFinite(Number(input.value))) {
+    updateUI();
+    return;
+  }
+  state.caseSize = state.caseSize || { w: currentCase.w, h: currentCase.h, d: currentCase.d };
+  state.caseSize[input.dataset.caseAxis] = Number(input.value);
+  buildAll();
+  fitCamera(root);
+  markProjectChanged();
+}
+
+for (const input of queryAll('[data-case-axis]')) {
+  input.addEventListener('input', () => {
+    clearTimeout(caseResizeTimer);
+    if (!input.value.trim() || !Number.isFinite(Number(input.value))) return;
+    caseResizeTimer = window.setTimeout(() => applyCaseInput(input), 180);
+  });
+  input.addEventListener('change', () => applyCaseInput(input));
+}
+query('#resetCaseSize').addEventListener('click', () => {
+  state.caseSize = null;
+  buildAll();
+  fitCamera(root);
+  markProjectChanged();
+});
+query('#projectSelect').addEventListener('change', event => {
+  const project = projectLibrary.get(event.target.value);
+  if (project) openProjectSnapshot(project, true);
+});
+query('#saveProject').addEventListener('click', () => saveActiveProject({ notify: true }));
+query('#downloadProject').addEventListener('click', downloadActiveProject);
+query('#openProject').addEventListener('click', () => query('#projectFile').click());
+query('#projectFile').addEventListener('change', async event => {
+  const [file] = event.target.files;
+  if (file) await importProjectFile(file);
+  event.target.value = '';
+});
+query('#newProject').addEventListener('click', () => {
+  const dialog = query('#projectDialog');
+  query('#projectName').value = `HackerDeck ${projectLibrary.size + 1}`;
+  dialog.showModal();
+  query('#projectName').select();
+});
+query('#cancelProject').addEventListener('click', () => query('#projectDialog').close());
+query('#projectForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const name = query('#projectName').value.trim();
+  if (!name) return;
+  query('#projectDialog').close();
+  createDeckProject(name);
+});
 drawerTriggers.sidebar.addEventListener('click', () => setDrawer('sidebar', openDrawerId !== 'sidebar'));
 drawerTriggers.inspector.addEventListener('click', () => setDrawer('inspector', openDrawerId !== 'inspector'));
 drawerBackdrop.addEventListener('click', () => closeDrawers(true));
@@ -876,8 +1184,12 @@ function renderFrame() {
   if (controlsChanged) requestRender();
 }
 
+initializeProjects();
 buildLists();
 buildAll();
+setXray(state.xray);
+loadingProject = false;
+saveActiveProject();
 resize();
 fitCamera(root);
 syncResponsivePanels();

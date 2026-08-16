@@ -19,7 +19,7 @@ test('BOM and keyboard catalogs retain their runtime contracts', () => {
   assertCatalog(baseParts, 'BOM');
   assertCatalog(keyboards, 'keyboard');
   assert.ok(keyboards.some(item => item.id === 'cardkb'));
-  assert.equal(baseParts.reduce((sum, item) => sum + item.qty * item.price, 0), 119.72);
+  assert.equal(baseParts.reduce((sum, item) => sum + item.qty * item.price, 0), 123.22);
 });
 
 test('fit-critical corrected dimensions do not regress to vendor listing errors', () => {
@@ -29,5 +29,6 @@ test('fit-critical corrected dimensions do not regress to vendor listing errors'
   assert.deepEqual(part('usbC').dims, [22, 22, 5]);
   assert.deepEqual(part('wifiAnt').dims, [9.5, 85, 9.5]);
   assert.deepEqual(part('btAnt').dims, [13, 95, 1]);
+  assert.deepEqual(part('breadboard').dims, [47, 35, 8.5]);
   assert.equal(part('batteryShield').dimsType, 'estimate');
 });

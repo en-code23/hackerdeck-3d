@@ -32,12 +32,12 @@ export function validateArtifact(artifactDir) {
   const index = fs.readFileSync(indexPath, 'utf8');
   assertNoPlaceholders('Generated index', index);
 
-  const scriptMatch = index.match(/<script type="module" src="\.\/assets\/(app-([a-f0-9]{32})\.js)"><\/script>/);
-  if (!scriptMatch) throw new Error('Generated index must reference one content-addressed application module.');
-  const assetFilename = scriptMatch[1];
+  const scriptMatch = index.match(/import\((['"])\.\/assets\/(app-([a-f0-9]{32})\.js)\1\)/);
+  if (!scriptMatch) throw new Error('Generated index must load one content-addressed application module.');
+  const assetFilename = scriptMatch[2];
   const assetPath = path.join(artifactDir, 'assets', assetFilename);
   const appJs = fs.readFileSync(assetPath, 'utf8');
-  if (sha256(appJs).slice(0, 32) !== scriptMatch[2]) throw new Error('Application asset filename hash mismatch.');
+  if (sha256(appJs).slice(0, 32) !== scriptMatch[3]) throw new Error('Application asset filename hash mismatch.');
   assertNoPlaceholders('Application bundle', appJs);
   if (/cdn\.jsdelivr\.net|https:\/\/.*three/i.test(appJs)) throw new Error('Runtime Three.js CDN dependency found.');
 

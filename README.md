@@ -8,7 +8,10 @@ Public source repository for the ESP32-S3 + ESP32-C5 HackerDeck 3D configurator.
 - Fog-free CAD workbench with ISO/front/top/right views, grid and XYZ axes
 - Selectable, movable and rotatable assembly components with numeric offsets, snapping and reset
 - Exploded, X-ray and component-isolation views
-- Procedural case sizing and a clearance-aware rear keyboard pocket for 19 keyboard options
+- Editable case width, height and depth with keyboard-safe minimums and one-click auto-fit
+- Clearance-aware rear keyboard pocket for 19 keyboard options
+- Movable mini breadboard and independent left/right hinge layout components
+- Multiple locally saved deck projects with portable `.hackerdeck.json` import/export
 - Dimension and availability notes backed by source links
 - Responsive keyboard, touch, mouse and accessible camera controls
 - Dynamic BOM pricing
@@ -26,6 +29,8 @@ python3 -m http.server --directory site 4173
 Open `http://127.0.0.1:4173/`. The generated `site/` directory is ignored by Git and contains only the deployable static artifact.
 
 Select any part in the viewport or component list. Drag the transform gizmo or edit its XYZ offsets; `G` selects move and `R` selects rotate. The keyboard body is recessed behind the front faceplate so only the keys and touch surface remain exposed.
+
+Use **+ Neues Deck** to start a separate configuration. Projects auto-save in the current browser; **Speichern** confirms an immediate save, while **JSON Download** creates a portable project file that can be restored with **JSON öffnen**. Project files contain only configurator state—keyboard choice, case dimensions, view settings and component transforms.
 
 ## GitHub Pages
 

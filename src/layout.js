@@ -1,10 +1,17 @@
 const round = value => Math.round(value * 1000) / 1000;
 
-export function caseLayoutFor(keyboard) {
+const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
+
+export function caseLayoutFor(keyboard, requestedSize = null) {
   const [keyboardWidth, keyboardHeight, keyboardDepth] = keyboard.dims;
-  const width = Math.max(116, keyboardWidth + 14);
-  const height = keyboardHeight + 128;
-  const depth = Math.max(36, Math.min(44, keyboardDepth + 20));
+  const minimum = {
+    w: Math.max(116, keyboardWidth + 14),
+    h: keyboardHeight + 128,
+    d: Math.max(36, Math.min(44, keyboardDepth + 20))
+  };
+  const width = clamp(Number(requestedSize?.w) || minimum.w, minimum.w, 420);
+  const height = clamp(Number(requestedSize?.h) || minimum.h, minimum.h, 500);
+  const depth = clamp(Number(requestedSize?.d) || minimum.d, minimum.d, 120);
   const keyboardY = -height / 2 + keyboardHeight / 2 + 8;
   const displayY = height / 2 - 39;
   const keyboardTop = keyboardY + keyboardHeight / 2;
@@ -29,6 +36,8 @@ export function caseLayoutFor(keyboard) {
     frontZ: round(frontZ),
     faceplateCenterZ: round(frontZ - 0.2),
     faceplateFrontZ: round(frontZ + 0.6),
+    minimum: { w: round(minimum.w), h: round(minimum.h), d: round(minimum.d) },
+    customized: Boolean(requestedSize),
     pocket: {
       w: round(pocketWidth),
       h: round(pocketHeight),
