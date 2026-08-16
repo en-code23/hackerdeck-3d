@@ -13,7 +13,7 @@ Private-source, password-encrypted GitHub Pages preview for an ESP32-S3 + ESP32-
 - Static-site encryption: PBKDF2-SHA-256 + AES-256-GCM
 
 ## Password security
-The deployed `site/` contains only the login shell plus an encrypted payload. The password is **not** stored in the published HTML or payload JSON. The plaintext app remains in this private repository and is not uploaded by the Pages workflow.
+The deployed `site/` contains only the login shell plus an encrypted payload. The password is **not** stored in the published HTML or payload metadata. The plaintext app remains in this private repository and is not uploaded by the Pages workflow.
 
 This is still a static site: a strong password matters because an attacker can copy the encrypted payload and attempt offline guesses.
 
@@ -21,7 +21,7 @@ This is still a static site: a strong password matters because an attacker can c
 ```bash
 HACKERDECK_PASSWORD='your-long-password' npm run build
 ```
-Then commit the updated `site/protected/payload.json`.
+Then commit the updated `site/protected/payload-meta.json` and `site/protected/payload-*.txt` files.
 
 ## GitHub Pages
 The included workflow deploys only the `site/` directory. In repository Settings → Pages, choose **GitHub Actions** as the source if GitHub has not done so automatically.
