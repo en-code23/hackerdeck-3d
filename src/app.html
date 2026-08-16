@@ -32,22 +32,41 @@
         <div style="height:10px"></div>
         <button class="ghost" id="resetCamera" style="width:100%">Kamera zurücksetzen</button>
       </section>
+      <section class="panel transformPanel">
+        <div class="label"><h3 style="margin:0">CAD-Werkzeug</h3><span class="cadStatus" id="cadStatus">kein Bauteil</span></div>
+        <div class="toolrow" role="toolbar" aria-label="Transformationswerkzeuge">
+          <button class="toolBtn active" data-transform="translate" type="button" aria-pressed="true"><kbd>G</kbd> Bewegen</button>
+          <button class="toolBtn" data-transform="rotate" type="button" aria-pressed="false"><kbd>R</kbd> Drehen</button>
+          <button class="toolBtn" id="toggleSnap" type="button" aria-pressed="true">1 mm Snap</button>
+        </div>
+        <div class="axisGrid" aria-label="Position des gewählten Bauteils in Millimetern">
+          <label><span class="axis axisX">X</span><input id="positionX" data-axis="x" type="number" step="1" value="0" disabled /></label>
+          <label><span class="axis axisY">Y</span><input id="positionY" data-axis="y" type="number" step="1" value="0" disabled /></label>
+          <label><span class="axis axisZ">Z</span><input id="positionZ" data-axis="z" type="number" step="1" value="0" disabled /></label>
+        </div>
+        <div class="toolrow toolrowSecondary">
+          <button class="ghost" id="resetPart" type="button" disabled>Bauteil zurücksetzen</button>
+          <button class="ghost activeToggle" id="toggleXray" type="button" aria-pressed="false">X-Ray</button>
+        </div>
+        <p class="panelHelp">Bauteil im Modell oder in der Liste wählen. Am Achsenkreuz ziehen; G/R wechselt das Werkzeug.</p>
+      </section>
       <section class="panel">
         <h3>Gehäusemaß</h3>
         <div class="metricgrid"><div class="metric"><strong id="dimW">—</strong><span>BREITE</span></div><div class="metric"><strong id="dimH">—</strong><span>HÖHE</span></div><div class="metric"><strong id="dimD">—</strong><span>DICKE</span></div></div>
       </section>
       <section class="panel">
-        <div class="label"><h3 style="margin:0">Komponenten</h3><span>antippen = isolieren</span></div>
+        <div class="label"><h3 style="margin:0">Komponenten</h3><span>wählen + bewegen</span></div>
         <div class="componentList" id="componentList" role="list"></div>
       </section>
       <div class="footerNote">3D-Modelle sind maßstäbliche Layout-Modelle auf Basis der angegebenen bzw. recherchierten Abmessungen, keine fertigen STEP/CAD-Produktmodelle. Vor PCB/3D-Druck müssen echte Bauteile nachgemessen werden.</div>
     </aside>
 
     <section class="stage">
-      <canvas id="canvas" aria-label="Interaktives 3D-Modell des HackerDecks. Mit Ziehen drehen, mit Mausrad oder Pinch zoomen.">Ihr Browser unterstützt die interaktive 3D-Ansicht nicht.</canvas>
-      <div class="stagehud"><div class="hudgroup"><span class="hudchip" id="modeChip">ASSEMBLY</span><span class="hudchip" id="kbdChip">—</span></div><div class="hudgroup"><span class="hudchip">Drag: drehen</span><span class="hudchip">Pinch/Wheel: zoom</span></div></div>
+      <canvas id="canvas" tabindex="0" aria-label="Interaktives CAD-Modell des HackerDecks. Bauteile anklicken und am Achsenkreuz bewegen. Leeren Raum ziehen dreht die Kamera; Mausrad oder Pinch zoomt.">Ihr Browser unterstützt die interaktive 3D-Ansicht nicht.</canvas>
+      <div class="stagehud"><div class="hudgroup"><span class="hudchip" id="modeChip">ASSEMBLY</span><span class="hudchip" id="selectedChip">AUSWAHL · KEINE</span><span class="hudchip" id="kbdChip">—</span></div><div class="hudgroup interactionHint"><span class="hudchip">Klick: wählen</span><span class="hudchip">Drag leer: Orbit</span><span class="hudchip">Wheel: Zoom</span></div></div>
+      <div class="viewTools" role="toolbar" aria-label="Standardansichten"><span>ANSICHT</span><button type="button" data-standard-view="iso">ISO</button><button type="button" data-standard-view="front">VORNE</button><button type="button" data-standard-view="top">OBEN</button><button type="button" data-standard-view="right">RECHTS</button></div>
       <div class="cameraTools" role="group" aria-label="Kamerasteuerung"><button type="button" data-camera="left" aria-label="Modell nach links drehen">↶</button><button type="button" data-camera="right" aria-label="Modell nach rechts drehen">↷</button><button type="button" data-camera="in" aria-label="Ansicht vergrößern">+</button><button type="button" data-camera="out" aria-label="Ansicht verkleinern">−</button></div>
-      <div class="legend" id="legend">Das Gehäuse wird automatisch an die gewählte Tastatur angepasst. Mit „Exploded“ kannst du die Innenteile auseinanderziehen.</div>
+      <div class="legend" id="legend"><strong>KEYBOARD POCKET</strong> Der Tastaturkörper sitzt zurückgesetzt in einer hinteren Tasche. Frontseitig bleiben nur Tasten und Touch-Flächen sichtbar.</div>
     </section>
 
     <aside class="inspector" id="inspector">
